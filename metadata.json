@@ -1,0 +1,6 @@
+{
+  "name": "AstroFITS Studio",
+  "description": "Professional astrophotography FITS viewer, auto-stretcher, Gemini AI plate-solver, Dwarf 3 companion with planetary ADC, 360° compass, Bortle scale, weather, and upcoming celestial events.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

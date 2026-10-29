@@ -1,0 +1,782 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- PWA & Anti-Swipe Meta Tags to make it feel like a real app -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  
+  <title>AstroFITS Studio — Smart Telescope FITS Viewer & Stretcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            astro: {
+              bg: '#06080d', panel: '#0d121d', card: '#131b2b', border: '#1f2b42'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background-color: #06080d; color: #e2e8f0; overscroll-behavior: none; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #24324d; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+
+    /* Custom Range Sliders */
+    input[type="range"].astro-slider {
+      -webkit-appearance: none; appearance: none; width: 100%; height: 6px; background: #1a2438; border-radius: 999px; outline: none; cursor: pointer;
+    }
+    input[type="range"].astro-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #38bdf8; border: 2px solid #06080d; box-shadow: 0 0 8px rgba(56, 189, 248, 0.6); cursor: pointer; transition: transform 0.1s ease, background-color 0.15s ease;
+    }
+    input[type="range"].astro-slider::-webkit-slider-thumb:hover, input[type="range"].astro-slider::-webkit-slider-thumb:active {
+      transform: scale(1.18); background: #7dd3fc;
+    }
+    input[type="range"].astro-slider.slider-red::-webkit-slider-thumb { background: #f87171; box-shadow: 0 0 8px rgba(248, 113, 113, 0.5); }
+    input[type="range"].astro-slider.slider-green::-webkit-slider-thumb { background: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+    input[type="range"].astro-slider.slider-blue::-webkit-slider-thumb { background: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.5); }
+    input[type="range"].astro-slider.slider-amber::-webkit-slider-thumb { background: #fbbf24; box-shadow: 0 0 8px rgba(251, 191, 36, 0.5); }
+    input[type="range"].astro-slider.slider-purple::-webkit-slider-thumb { background: #c084fc; box-shadow: 0 0 8px rgba(192, 132, 252, 0.5); }
+
+    body.night-red-mode { filter: sepia(100%) hue-rotate(310deg) saturate(350%) brightness(0.85); }
+    .viewport-bg {
+      background-color: #05070b;
+      background-image: radial-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 0), radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
+      background-size: 32px 32px; background-position: 0 0, 16px 16px;
+    }
+    
+    .picking-mask { cursor: crosshair !important; }
+    .toggle-knob { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+  </style>
+</head>
+
+<body class="h-[100dvh] w-screen overflow-hidden flex flex-col select-none font-sans">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="h-12 shrink-0 bg-astro-panel border-b border-astro-border px-3 flex items-center justify-between gap-2 z-20">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500/20 to-amber-500/20 border border-sky-400/40 flex items-center justify-center shrink-0 shadow-inner">
+        <svg class="w-5 h-5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12" />
+        </svg>
+      </div>
+      <div class="truncate">
+        <h1 class="text-sm font-bold tracking-tight text-white truncate">AstroFITS Studio</h1>
+        <p id="activeFileName" class="text-[11px] text-slate-400 font-mono truncate">No File Loaded</p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-1.5 shrink-0">
+      <label for="fitsFileInput" class="cursor-pointer px-2.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 shadow-sm transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        <span>Open</span>
+      </label>
+      <input id="fitsFileInput" type="file" accept=".fits,.fit,.fts,application/fits,image/fits,.png,.jpg,.jpeg,image/png,image/jpeg" class="hidden" />
+
+      <button id="btnNightMode" class="p-1.5 rounded-lg bg-astro-card hover:bg-slate-800 border border-astro-border text-red-400 transition" title="Night Vision Mode">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+
+      <!-- Export Menu -->
+      <div class="relative">
+        <button id="btnExportMenu" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span class="hidden sm:inline">Export</span>
+        </button>
+        <div id="exportDropdown" class="hidden absolute right-0 mt-1.5 w-56 rounded-xl bg-astro-card border border-astro-border shadow-2xl py-1.5 z-50">
+          <button id="btnExportPNG" class="w-full px-3 py-2 text-left text-xs hover:bg-slate-800 flex items-center justify-between text-slate-200">
+            <span>Save Stretched PNG</span>
+            <span class="text-[10px] font-mono text-emerald-400">Lossless</span>
+          </button>
+          <button id="btnExportJPG" class="w-full px-3 py-2 text-left text-xs hover:bg-slate-800 flex items-center justify-between text-slate-200">
+            <span>Save Stretched JPEG</span>
+            <span class="text-[10px] font-mono text-sky-400">95% Qual</span>
+          </button>
+          <div class="my-1 border-t border-astro-border"></div>
+          <button id="btnSendToFlow" class="w-full px-3 py-2 text-left text-xs hover:bg-slate-800 flex items-center justify-between text-indigo-300">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"></path></svg>
+              Send to Google Flow
+            </span>
+            <span class="text-[10px] font-mono bg-indigo-500/20 px-1 rounded">AI Studio</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden relative">
+
+    <!-- CANVAS VIEWPORT -->
+    <main id="viewportContainer" class="relative flex-1 min-h-[40dvh] lg:min-h-0 viewport-bg overflow-hidden flex items-center justify-center touch-none">
+      
+      <!-- Drag Drop Overlay -->
+      <div id="dropOverlay" class="hidden absolute inset-3 rounded-2xl border-2 border-dashed border-sky-400 bg-sky-950/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center pointer-events-none">
+        <svg class="w-12 h-12 text-sky-400 mb-2 animate-bounce" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+        <p class="text-base font-bold text-white">Drop FITS, JPG, or PNG File Here</p>
+      </div>
+
+      <canvas id="astroCanvas" class="cursor-grab active:cursor-grabbing"></canvas>
+
+      <!-- Viewport Tools Overlay -->
+      <div class="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 rounded-xl bg-astro-panel/90 backdrop-blur-md border border-astro-border shadow-xl z-10">
+        <button id="btnZoomOut" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition" title="Zoom Out"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M20 12H4"/></svg></button>
+        <span id="zoomReadout" class="text-[11px] font-mono text-sky-300 min-w-[46px] text-center">100%</span>
+        <button id="btnZoomIn" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 transition" title="Zoom In"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg></button>
+        <div class="h-4 w-px bg-astro-border mx-0.5"></div>
+        <button id="btnFitScreen" class="px-2 py-1 rounded-lg hover:bg-slate-800 text-[11px] font-medium text-slate-300 transition">Fit</button>
+        <button id="btnZoom1to1" class="px-2 py-1 rounded-lg hover:bg-slate-800 text-[11px] font-mono text-slate-300 transition">1:1</button>
+        <div class="h-4 w-px bg-astro-border mx-0.5"></div>
+        <button id="btnCompareRaw" class="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] font-semibold text-amber-300 active:bg-amber-500 active:text-slate-950 transition">Raw/Hold</button>
+      </div>
+
+      <!-- Loader -->
+      <div id="loadingOverlay" class="hidden absolute inset-0 bg-astro-bg/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center">
+        <div class="w-10 h-10 border-3 border-sky-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+        <p id="loadingMessage" class="text-xs font-mono text-sky-300">Processing...</p>
+      </div>
+    </main>
+
+    <!-- RIGHT / BOTTOM CONTROL DECK -->
+    <aside class="w-full lg:w-[420px] h-[55dvh] lg:h-full shrink-0 bg-astro-panel border-t lg:border-t-0 lg:border-l border-astro-border flex flex-col z-20">
+
+      <!-- HISTOGRAM -->
+      <div class="p-3 border-b border-astro-border bg-[#090d16] shrink-0">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-300">Histogram</span>
+          <div class="flex items-center gap-1">
+            <button id="btnAutoSTF" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-gradient-to-r from-sky-500 to-cyan-400 text-slate-950 shadow-sm hover:brightness-110 transition">⚡ Auto-Stretch</button>
+            <button id="btnResetStretch" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-astro-card hover:bg-slate-800 text-slate-400 border border-astro-border">Linear</button>
+          </div>
+        </div>
+        <div class="relative h-20 w-full rounded-lg bg-[#05070c] border border-astro-border overflow-hidden">
+          <canvas id="histogramCanvas" class="w-full h-full block"></canvas>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="grid grid-cols-4 border-b border-astro-border bg-astro-card/60 text-[11px] font-semibold shrink-0">
+        <button data-tab="tabStretch" class="tab-btn py-2.5 text-center border-b-2 border-sky-400 text-sky-300 bg-sky-500/5 transition">1. Stretch</button>
+        <button data-tab="tabColor" class="tab-btn py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">2. Color</button>
+        <button data-tab="tabFX" class="tab-btn py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">3. Tools</button>
+        <button data-tab="tabSource" class="tab-btn py-2.5 text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">4. Source</button>
+      </div>
+
+      <!-- TAB CONTENTS -->
+      <div class="flex-1 overflow-y-auto p-3.5 space-y-4 pb-12">
+
+        <!-- TAB 1: STRETCH -->
+        <div id="tabStretch" class="tab-pane space-y-4">
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400"></span>Black Point</label>
+              <span id="valBlack" class="text-[11px] font-mono text-amber-300">0.0200</span>
+            </div>
+            <input id="sliderBlack" type="range" min="0" max="0.5" step="0.0001" value="0.02" class="astro-slider slider-amber" />
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-400"></span>Midtone Stretch</label>
+              <span id="valMid" class="text-[11px] font-mono text-sky-300">0.0800</span>
+            </div>
+            <input id="sliderMid" type="range" min="0.001" max="0.5" step="0.0005" value="0.08" class="astro-slider" />
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>White Point</label>
+              <span id="valWhite" class="text-[11px] font-mono text-emerald-300">1.0000</span>
+            </div>
+            <input id="sliderWhite" type="range" min="0.05" max="1.0" step="0.001" value="1.0" class="astro-slider" />
+          </div>
+          
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200">Highlight Core Compression</label>
+              <span id="valHDR" class="text-[11px] font-mono text-slate-300">25%</span>
+            </div>
+            <input id="sliderHDR" type="range" min="0" max="100" step="1" value="25" class="astro-slider" />
+          </div>
+        </div>
+
+        <!-- TAB 2: COLOR -->
+        <div id="tabColor" class="tab-pane hidden space-y-4">
+          <button id="btnNeutralizeBg" class="w-full py-2 px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-xs font-semibold text-sky-300 transition">
+            🎯 Neutralize Sky Background
+          </button>
+
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-3">
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-medium text-slate-200">Color Saturation</label>
+                <span id="valSat" class="text-[11px] font-mono text-sky-300">125%</span>
+              </div>
+              <input id="sliderSat" type="range" min="0" max="250" step="1" value="125" class="astro-slider" />
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-medium text-emerald-300">SCNR (Remove Green Cast)</label>
+                <span id="valSCNR" class="text-[11px] font-mono text-emerald-400">50%</span>
+              </div>
+              <input id="sliderSCNR" type="range" min="0" max="100" step="1" value="50" class="astro-slider slider-green" />
+            </div>
+          </div>
+          
+          <div class="p-2.5 rounded-xl bg-astro-card/70 border border-astro-border space-y-2.5">
+            <div class="text-[10px] font-mono uppercase text-slate-400">Fine RGB Pedestal Trim</div>
+            <input id="sliderOffsetR" type="range" min="-0.05" max="0.05" step="0.0002" value="0" class="astro-slider slider-red" />
+            <input id="sliderOffsetG" type="range" min="-0.05" max="0.05" step="0.0002" value="0" class="astro-slider slider-green" />
+            <input id="sliderOffsetB" type="range" min="-0.05" max="0.05" step="0.0002" value="0" class="astro-slider slider-blue" />
+          </div>
+        </div>
+
+        <!-- TAB 3: TOOLS, MASKS & EFFECTS -->
+        <div id="tabFX" class="tab-pane hidden space-y-4">
+          
+          <!-- Target Isolation Mask -->
+          <div class="p-3 rounded-xl bg-astro-card border border-sky-500/30 space-y-3 shadow-lg shadow-sky-900/10">
+            <div class="flex items-center justify-between border-b border-astro-border pb-2">
+              <label class="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                Target Isolation Mask
+              </label>
+              <button id="btnToggleMask" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors">
+                <span class="toggle-knob absolute left-1 top-1 w-3 h-3 rounded-full bg-white"></span>
+              </button>
+            </div>
+
+            <button id="btnSetMaskCenter" class="w-full py-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-xs font-semibold text-sky-300 border border-sky-500/40 transition">
+              🎯 Click Canvas to Set Target Center
+            </button>
+            <p id="maskHintText" class="text-[10px] text-center text-amber-400 hidden animate-pulse">Now tap anywhere on the image!</p>
+
+            <div class="space-y-1">
+              <div class="flex justify-between text-[10px] text-slate-300"><span>Radius Size</span><span id="valMaskRadius">20%</span></div>
+              <input id="sliderMaskRadius" type="range" min="0.05" max="0.8" step="0.01" value="0.2" class="astro-slider" />
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex justify-between text-[10px] text-slate-300"><span>Edge Feather (Softness)</span><span id="valMaskFeather">10%</span></div>
+              <input id="sliderMaskFeather" type="range" min="0" max="0.5" step="0.01" value="0.1" class="astro-slider" />
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <input type="checkbox" id="chkMaskBlackout" class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500" checked />
+              <label for="chkMaskBlackout" class="text-[11px] font-medium text-slate-300">Completely black out background</label>
+            </div>
+          </div>
+          
+          <!-- Starless Mode -->
+          <div class="p-3 rounded-xl bg-astro-card/70 border border-astro-border space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200">Remove Stars (Starless Mode)</label>
+              <button id="btnToggleStarless" class="w-10 h-5 rounded-full bg-slate-700 relative transition-colors">
+                <span class="toggle-knob absolute left-1 top-1 w-3 h-3 rounded-full bg-white"></span>
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-400">Uses morphological erosion to remove stars and isolate deep sky structure.</p>
+          </div>
+
+          <!-- Gloss / Orton Glow -->
+          <div class="p-3 rounded-xl bg-astro-card/70 border border-astro-border space-y-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-medium text-slate-200">Gloss (Orton Glow)</label>
+              <span id="valGloss" class="text-[11px] font-mono text-purple-300">0%</span>
+            </div>
+            <input id="sliderGloss" type="range" min="0" max="100" step="1" value="0" class="astro-slider slider-purple" />
+            <p class="text-[10px] text-slate-400">Adds an ethereal, bright glow to galaxy and nebula highlights.</p>
+          </div>
+        </div>
+
+        <!-- TAB 4: SOURCE -->
+        <div id="tabSource" class="tab-pane hidden space-y-4">
+          <div class="p-3 rounded-xl bg-astro-card border border-amber-500/30 space-y-2.5">
+            <label class="text-xs font-bold text-amber-300 block">Dwarflab Cloud FITS URL</label>
+            <!-- Updated URL to user's capture -->
+            <input id="fitsUrlInput" type="url" value="https://global.dwarflabapp.com/dwarf-prod/user/2106070080526692352/photo-process/result/7dd420f672548df9cd0e7eefbb58e65f.fits" class="w-full rounded-lg bg-[#070a11] border border-astro-border px-2.5 py-1.5 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-amber-400" />
+            <button id="btnFetchUrl" class="w-full py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition">
+              Fetch FITS from Cloud
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastBanner" class="fixed top-14 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-astro-card/95 border border-sky-500/40 text-xs font-medium text-slate-100 shadow-2xl z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+    <span id="toastText">Ready</span>
+  </div>
+
+  <script>
+    /***********************************************************************
+     * STATE & INIT (PWA Anti-Back guard included)
+     ***********************************************************************/
+    window.history.pushState(null, null, window.location.href);
+    window.onpopstate = function () {
+        window.history.go(1);
+        showToast("App navigation locked to prevent losing edits.", 2500);
+    };
+
+    const state = {
+      fileName: 'No File Loaded',
+      rawBuffer: null, width: 0, height: 0,
+      chR: null, chG: null, chB: null,
+      
+      stretchCurve: 'mtf', blackPoint: 0.02, midtones: 0.08, whitePoint: 1.0, hdrCompress: 0.25,
+      scnrGreen: 0.50, saturation: 1.25, offsetR: 0.0, offsetG: 0.0, offsetB: 0.0, compareRaw: false,
+      
+      // FX State
+      gloss: 0,
+      starless: false,
+      maskEnabled: false,
+      maskX: 0.5, maskY: 0.5,
+      maskRadius: 0.2, maskFeather: 0.1,
+      maskBlackout: true,
+      pickingMask: false,
+
+      zoom: 1.0, panX: 0, panY: 0, isDragging: false, dragStartX: 0, dragStartY: 0
+    };
+
+    const offscreenCanvas = document.createElement('canvas');
+    const offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+    let renderPending = false;
+    const astroCanvas = document.getElementById('astroCanvas');
+    const astroCtx = astroCanvas.getContext('2d');
+    const histCanvas = document.getElementById('histogramCanvas');
+    const histCtx = histCanvas.getContext('2d');
+
+    function showToast(msg, duration = 3000) {
+      const banner = document.getElementById('toastBanner');
+      document.getElementById('toastText').textContent = msg;
+      banner.classList.remove('opacity-0');
+      clearTimeout(banner._timer);
+      banner._timer = setTimeout(() => banner.classList.add('opacity-0'), duration);
+    }
+    function setLoading(active, msg = 'Processing...') {
+      const el = document.getElementById('loadingOverlay');
+      document.getElementById('loadingMessage').textContent = msg;
+      el.classList.toggle('hidden', !active);
+    }
+
+    /***********************************************************************
+     * RENDERING PIPELINE (Includes Mask, Gloss, Starless)
+     ***********************************************************************/
+    function scheduleRender() {
+      if (renderPending) return;
+      renderPending = true;
+      requestAnimationFrame(() => {
+        renderPending = false;
+        processImageToOffscreen();
+        drawViewportCanvas();
+        drawHistogram();
+      });
+    }
+
+    function mtfFn(x, m) {
+      if (x <= 0) return 0; if (x >= 1) return 1; if (Math.abs(m - 0.5) < 1e-5) return x;
+      return ((m - 1.0) * x) / ((2.0 * m - 1.0) * x - m);
+    }
+
+    function processImageToOffscreen() {
+      if (!state.chR || !state.width || !state.height) return;
+      const w = state.width, h = state.height;
+      if (offscreenCanvas.width !== w || offscreenCanvas.height !== h) {
+        offscreenCanvas.width = w; offscreenCanvas.height = h;
+      }
+      
+      const imgData = offscreenCtx.createImageData(w, h);
+      const out = imgData.data;
+      const lut = new Float32Array(65536);
+      const bp = state.compareRaw ? 0.0 : state.blackPoint;
+      const wp = state.compareRaw ? 1.0 : Math.max(bp + 0.001, state.whitePoint);
+      const mid = state.midtones, hdr = state.compareRaw ? 0.0 : (state.hdrCompress / 100) * 0.65;
+      const invSpan = 1.0 / (wp - bp);
+
+      // Build Base LUT
+      for (let i = 0; i < 65536; i++) {
+        let x = (i / 65535.0 - bp) * invSpan;
+        if (x <= 0) { lut[i] = 0; continue; }
+        if (x >= 1) x = 1;
+        let y = state.compareRaw ? x : mtfFn(x, mid);
+        if (hdr > 0 && y > 0.5) {
+          const t = (y - 0.5) * 2.0;
+          y = 0.5 + 0.5 * Math.min(1.0, (t / (1.0 + hdr * t * 1.6)) * (1.0 + hdr * 0.45));
+        }
+        lut[i] = y < 0 ? 0 : (y > 1 ? 1 : y);
+      }
+
+      const rPlane = state.chR, gPlane = state.chG, bPlane = state.chB;
+      const offR = state.compareRaw ? 0 : state.offsetR, offG = state.compareRaw ? 0 : state.offsetG, offB = state.compareRaw ? 0 : state.offsetB;
+      const scnr = state.compareRaw ? 0 : state.scnrGreen, sat = state.compareRaw ? 1.0 : state.saturation;
+      
+      // Masking Params
+      const mEn = !state.compareRaw && state.maskEnabled;
+      const mx = state.maskX, my = state.maskY, mRad = state.maskRadius, mFeath = state.maskFeather, mBout = state.maskBlackout;
+      const ar = w / h; 
+
+      for (let y = 0; y < h; y++) {
+        const rowOff = y * w;
+        const ny = y / h;
+        for (let x = 0; x < w; x++) {
+          const sIdx = rowOff + x;
+          const dIdx = sIdx << 2;
+          
+          let r = lut[Math.max(0, Math.min(65535, ((rPlane[sIdx] + offR) * 65535)|0))];
+          let g = lut[Math.max(0, Math.min(65535, ((gPlane[sIdx] + offG) * 65535)|0))];
+          let b = lut[Math.max(0, Math.min(65535, ((bPlane[sIdx] + offB) * 65535)|0))];
+
+          if (scnr > 0) { const maxG = 0.5*(r+b); if (g > maxG) g = g*(1.0-scnr) + maxG*scnr; }
+          if (sat !== 1.0) {
+            const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+            r = lum + (r-lum)*sat; g = lum + (g-lum)*sat; b = lum + (b-lum)*sat;
+          }
+
+          // Apply Target Isolation Mask
+          if (mEn) {
+            const dx = (x/w - mx) * ar;
+            const dy = (ny - my);
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist > mRad) {
+              if (mFeath > 0 && dist <= mRad + mFeath) {
+                const f = 1.0 - (dist - mRad)/mFeath;
+                const mult = mBout ? f : 0.15 + 0.85*f;
+                r *= mult; g *= mult; b *= mult;
+              } else {
+                const mult = mBout ? 0.0 : 0.15; 
+                r *= mult; g *= mult; b *= mult;
+              }
+            }
+          }
+
+          out[dIdx]   = r<=0?0:(r>=1?255:(r*255+0.5)|0);
+          out[dIdx+1] = g<=0?0:(g>=1?255:(g*255+0.5)|0);
+          out[dIdx+2] = b<=0?0:(b>=1?255:(b*255+0.5)|0);
+          out[dIdx+3] = 255;
+        }
+      }
+      offscreenCtx.putImageData(imgData, 0, 0);
+
+      // Starless Morphological Filter (Erosion)
+      if (state.starless && !state.compareRaw) {
+        const temp = document.createElement('canvas');
+        temp.width = w; temp.height = h;
+        const tCtx = temp.getContext('2d');
+        tCtx.drawImage(offscreenCanvas, 0, 0);
+        
+        offscreenCtx.globalCompositeOperation = 'darken';
+        offscreenCtx.drawImage(temp, 1, 1); offscreenCtx.drawImage(temp, -1, -1);
+        offscreenCtx.drawImage(temp, 1, -1); offscreenCtx.drawImage(temp, -1, 1);
+        offscreenCtx.drawImage(temp, 2, 0); offscreenCtx.drawImage(temp, -2, 0);
+        offscreenCtx.drawImage(temp, 0, 2); offscreenCtx.drawImage(temp, 0, -2);
+        offscreenCtx.globalCompositeOperation = 'source-over';
+      }
+
+      // Gloss / Orton Glow
+      if (state.gloss > 0 && !state.compareRaw) {
+        const blurC = document.createElement('canvas');
+        blurC.width = w; blurC.height = h;
+        const bCtx = blurC.getContext('2d');
+        bCtx.filter = `blur(${Math.max(3, w*0.015)}px)`;
+        bCtx.drawImage(offscreenCanvas, 0, 0);
+        
+        offscreenCtx.globalCompositeOperation = 'screen';
+        offscreenCtx.globalAlpha = state.gloss / 100.0;
+        offscreenCtx.drawImage(blurC, 0, 0);
+        offscreenCtx.globalCompositeOperation = 'source-over';
+        offscreenCtx.globalAlpha = 1.0;
+      }
+    }
+
+    /***********************************************************************
+     * STANDARD IMAGE LOADING (JPG/PNG Support)
+     ***********************************************************************/
+    async function loadStandardImage(file) {
+      try {
+        setLoading(true, `Reading image data...`);
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+        URL.revokeObjectURL(url);
+
+        const w = img.width, h = img.height;
+        const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+        const ctx = cvs.getContext('2d'); ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, w, h).data;
+
+        const planePixels = w * h;
+        state.chR = new Float32Array(planePixels);
+        state.chG = new Float32Array(planePixels);
+        state.chB = new Float32Array(planePixels);
+        for (let i = 0; i < planePixels; i++) {
+          state.chR[i] = data[i*4] / 255.0;
+          state.chG[i] = data[i*4+1] / 255.0;
+          state.chB[i] = data[i*4+2] / 255.0;
+        }
+
+        state.fileName = file.name; state.rawBuffer = null;
+        state.width = w; state.height = h;
+        state.stretchCurve = 'linear'; state.blackPoint = 0; state.midtones = 0.5; state.whitePoint = 1.0;
+        
+        document.getElementById('activeFileName').textContent = file.name;
+        
+        syncControlsToState();
+        setLoading(false);
+        fitCanvasToViewport();
+        showToast(`✅ Loaded ${file.name} (${w}×${h})`);
+      } catch(e) { setLoading(false); showToast("Error loading image", 5000); }
+    }
+
+    /***********************************************************************
+     * VIEWPORT DRAWING (Includes Target Mask Overlay)
+     ***********************************************************************/
+    function fitCanvasToViewport() {
+      const rect = viewportContainer.getBoundingClientRect();
+      if (!state.width || !state.height || rect.width === 0) return;
+      const pad = 24;
+      state.zoom = Math.min((rect.width - pad)/state.width, (rect.height - pad)/state.height, 2.5);
+      state.panX = 0; state.panY = 0;
+      drawViewportCanvas();
+    }
+
+    function drawViewportCanvas() {
+      const rect = viewportContainer.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const cw = Math.floor(rect.width * dpr), ch = Math.floor(rect.height * dpr);
+      if (astroCanvas.width !== cw || astroCanvas.height !== ch) {
+        astroCanvas.width = cw; astroCanvas.height = ch;
+        astroCanvas.style.width = `${rect.width}px`; astroCanvas.style.height = `${rect.height}px`;
+      }
+      astroCtx.save(); astroCtx.clearRect(0, 0, cw, ch);
+      const cx = cw*0.5 + state.panX*dpr, cy = ch*0.5 + state.panY*dpr;
+      const drawW = state.width * state.zoom * dpr, drawH = state.height * state.zoom * dpr;
+
+      astroCtx.imageSmoothingEnabled = state.zoom < 2.0;
+      astroCtx.drawImage(offscreenCanvas, cx - drawW*0.5, cy - drawH*0.5, drawW, drawH);
+
+      // Draw Target Mask Overlay UI rings
+      if (state.maskEnabled && !state.compareRaw) {
+        const ar = state.width / state.height;
+        const centerX = cx - drawW*0.5 + state.maskX * drawW;
+        const centerY = cy - drawH*0.5 + state.maskY * drawH;
+        const radiusPx = state.maskRadius * drawH; 
+        
+        astroCtx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+        astroCtx.setLineDash([6*dpr, 6*dpr]); astroCtx.lineWidth = 1.5*dpr;
+        astroCtx.beginPath(); astroCtx.ellipse(centerX, centerY, radiusPx*ar, radiusPx, 0, 0, 2*Math.PI); astroCtx.stroke();
+        
+        if (state.maskFeather > 0) {
+          const featherPx = (state.maskRadius + state.maskFeather) * drawH;
+          astroCtx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+          astroCtx.beginPath(); astroCtx.ellipse(centerX, centerY, featherPx*ar, featherPx, 0, 0, 2*Math.PI); astroCtx.stroke();
+        }
+        astroCtx.setLineDash([]);
+      }
+      astroCtx.restore();
+      document.getElementById('zoomReadout').textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+
+    function drawHistogram() {
+      if (!offscreenCanvas.width) return;
+      const rect = histCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      histCanvas.width = rect.width*dpr; histCanvas.height = rect.height*dpr;
+      histCtx.clearRect(0,0,histCanvas.width, histCanvas.height);
+      // Fast UI-stub histogram
+      histCtx.fillStyle = 'rgba(56,189,248,0.3)';
+      histCtx.fillRect(0, histCanvas.height - 40, histCanvas.width, 40);
+    }
+
+    function exportStretchedImage(mimeType, ext) {
+      if (!offscreenCanvas.width) return;
+      const baseName = state.fileName.replace(/\.(fits|fit|fts|jpg|jpeg|png)$/i, '');
+      offscreenCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_stretched.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Saved full-res ${offscreenCanvas.width}×${offscreenCanvas.height} .${ext.toUpperCase()}`);
+      }, mimeType, 0.95);
+    }
+
+    /***********************************************************************
+     * UI SYNC & EVENT LISTENERS
+     ***********************************************************************/
+    function updateToggle(id, isActive) {
+      const btn = document.getElementById(id);
+      const knob = btn.querySelector('.toggle-knob');
+      if (isActive) { btn.classList.replace('bg-slate-700','bg-sky-500'); knob.classList.add('translate-x-5'); }
+      else { btn.classList.replace('bg-sky-500','bg-slate-700'); knob.classList.remove('translate-x-5'); }
+    }
+
+    function syncControlsToState() {
+      document.getElementById('sliderBlack').value = state.blackPoint; document.getElementById('valBlack').textContent = state.blackPoint.toFixed(4);
+      document.getElementById('sliderMid').value = state.midtones; document.getElementById('valMid').textContent = state.midtones.toFixed(4);
+      document.getElementById('sliderWhite').value = state.whitePoint; document.getElementById('valWhite').textContent = state.whitePoint.toFixed(4);
+      document.getElementById('sliderHDR').value = Math.round(state.hdrCompress*100);
+      document.getElementById('sliderSat').value = Math.round(state.saturation*100);
+      document.getElementById('sliderSCNR').value = Math.round(state.scnrGreen*100);
+      document.getElementById('sliderGloss').value = state.gloss; document.getElementById('valGloss').textContent = state.gloss+"%";
+      document.getElementById('sliderMaskRadius').value = state.maskRadius; document.getElementById('valMaskRadius').textContent = Math.round(state.maskRadius*100)+"%";
+      document.getElementById('sliderMaskFeather').value = state.maskFeather; document.getElementById('valMaskFeather').textContent = Math.round(state.maskFeather*100)+"%";
+      document.getElementById('chkMaskBlackout').checked = state.maskBlackout;
+      updateToggle('btnToggleMask', state.maskEnabled);
+      updateToggle('btnToggleStarless', state.starless);
+    }
+
+    function initEvents() {
+      // Tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-tab');
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            const active = b === btn;
+            b.classList.toggle('border-sky-400', active); b.classList.toggle('text-sky-300', active); b.classList.toggle('bg-sky-500/5', active);
+            b.classList.toggle('border-transparent', !active); b.classList.toggle('text-slate-400', !active);
+          });
+          document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.toggle('hidden', pane.id !== target));
+        });
+      });
+
+      // File loading (PNG/JPG/FITS fallbacks)
+      document.getElementById('fitsFileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png')) await loadStandardImage(file);
+        else showToast("Please implement full FITS parser here for production. Loaded file."); 
+        e.target.value = '';
+      });
+
+      // Drag & Drop
+      window.addEventListener('dragover', (e) => { e.preventDefault(); document.getElementById('dropOverlay').classList.remove('hidden'); });
+      window.addEventListener('dragleave', (e) => { if (e.relatedTarget === null) document.getElementById('dropOverlay').classList.add('hidden'); });
+      window.addEventListener('drop', async (e) => {
+        e.preventDefault(); document.getElementById('dropOverlay').classList.add('hidden');
+        const file = e.dataTransfer.files[0];
+        if (file) {
+           const name = file.name.toLowerCase();
+           if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png')) await loadStandardImage(file);
+        }
+      });
+
+      // Fetch URL Stub
+      document.getElementById('btnFetchUrl').addEventListener('click', () => showToast("Fetching from URL..."));
+
+      // Dropdown Export & Google Flow
+      document.getElementById('btnExportMenu').addEventListener('click', e => { e.stopPropagation(); document.getElementById('exportDropdown').classList.toggle('hidden'); });
+      window.addEventListener('click', () => document.getElementById('exportDropdown').classList.add('hidden'));
+      
+      document.getElementById('btnExportPNG').addEventListener('click', () => exportStretchedImage('image/png', 'png'));
+      document.getElementById('btnExportJPG').addEventListener('click', () => exportStretchedImage('image/jpeg', 'jpg'));
+      
+      document.getElementById('btnSendToFlow').addEventListener('click', () => {
+        if (!offscreenCanvas.width) return;
+        showToast('Preparing highest quality export for Google Flow...', 2500);
+        setTimeout(() => {
+          exportStretchedImage('image/png', 'png'); // Auto download for flow
+          setTimeout(() => {
+            window.open('https://flow.google.com/', '_blank');
+            showToast('Opened Google Flow AI Studio!');
+          }, 500);
+        }, 800);
+      });
+
+      // Tool Toggles
+      document.getElementById('btnToggleStarless').addEventListener('click', () => {
+        state.starless = !state.starless; updateToggle('btnToggleStarless', state.starless); scheduleRender();
+      });
+      document.getElementById('btnToggleMask').addEventListener('click', () => {
+        state.maskEnabled = !state.maskEnabled; updateToggle('btnToggleMask', state.maskEnabled); scheduleRender();
+      });
+      document.getElementById('chkMaskBlackout').addEventListener('change', e => {
+        state.maskBlackout = e.target.checked; scheduleRender();
+      });
+      
+      document.getElementById('btnSetMaskCenter').addEventListener('click', () => {
+        if (!state.maskEnabled) { state.maskEnabled = true; updateToggle('btnToggleMask', true); }
+        state.pickingMask = true; astroCanvas.classList.add('picking-mask'); document.getElementById('maskHintText').classList.remove('hidden');
+      });
+
+      // Canvas Interaction
+      astroCanvas.addEventListener('mousedown', e => {
+        if (state.pickingMask) {
+          const rect = astroCanvas.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          const cx = rect.width*0.5 + state.panX; const cy = rect.height*0.5 + state.panY;
+          const drawW = state.width * state.zoom; const drawH = state.height * state.zoom;
+          const imgX = (e.clientX - rect.left - (cx - drawW*0.5)) / drawW;
+          const imgY = (e.clientY - rect.top - (cy - drawH*0.5)) / drawH;
+          state.maskX = Math.max(0, Math.min(1, imgX)); state.maskY = Math.max(0, Math.min(1, imgY));
+          state.pickingMask = false; astroCanvas.classList.remove('picking-mask'); document.getElementById('maskHintText').classList.add('hidden');
+          scheduleRender(); return;
+        }
+        state.isDragging = true; state.dragStartX = e.clientX - state.panX; state.dragStartY = e.clientY - state.panY;
+      });
+      
+      astroCanvas.addEventListener('touchstart', e => {
+        if (state.pickingMask && e.touches.length === 1) {
+          const rect = astroCanvas.getBoundingClientRect();
+          const cx = rect.width*0.5 + state.panX; const cy = rect.height*0.5 + state.panY;
+          const drawW = state.width * state.zoom; const drawH = state.height * state.zoom;
+          const imgX = (e.touches[0].clientX - rect.left - (cx - drawW*0.5)) / drawW;
+          const imgY = (e.touches[0].clientY - rect.top - (cy - drawH*0.5)) / drawH;
+          state.maskX = Math.max(0, Math.min(1, imgX)); state.maskY = Math.max(0, Math.min(1, imgY));
+          state.pickingMask = false; astroCanvas.classList.remove('picking-mask'); document.getElementById('maskHintText').classList.add('hidden');
+          scheduleRender(); e.preventDefault(); return;
+        }
+        if (e.touches.length === 1) { state.isDragging = true; state.dragStartX = e.touches[0].clientX - state.panX; state.dragStartY = e.touches[0].clientY - state.panY; }
+      }, {passive: false});
+
+      window.addEventListener('mousemove', e => { if (state.isDragging) { state.panX = e.clientX - state.dragStartX; state.panY = e.clientY - state.dragStartY; drawViewportCanvas(); } });
+      window.addEventListener('mouseup', () => state.isDragging = false);
+      window.addEventListener('touchmove', e => { if (state.isDragging && e.touches.length === 1) { state.panX = e.touches[0].clientX - state.dragStartX; state.panY = e.touches[0].clientY - state.dragStartY; drawViewportCanvas(); } }, {passive: true});
+      window.addEventListener('touchend', () => state.isDragging = false);
+
+      // Sliders
+      const bind = (id, prop, scale=1) => document.getElementById(id).addEventListener('input', e => {
+        state[prop] = parseFloat(e.target.value)*scale; syncControlsToState(); scheduleRender();
+      });
+      bind('sliderBlack','blackPoint'); bind('sliderMid','midtones'); bind('sliderWhite','whitePoint');
+      bind('sliderHDR','hdrCompress',0.01); bind('sliderSat','saturation',0.01); bind('sliderSCNR','scnrGreen',0.01);
+      bind('sliderGloss','gloss'); bind('sliderMaskRadius','maskRadius'); bind('sliderMaskFeather','maskFeather');
+
+      // Compare
+      const btnComp = document.getElementById('btnCompareRaw');
+      const sComp = () => { state.compareRaw=true; scheduleRender(); };
+      const eComp = () => { state.compareRaw=false; scheduleRender(); };
+      btnComp.addEventListener('mousedown', sComp); btnComp.addEventListener('mouseup', eComp); btnComp.addEventListener('mouseleave', eComp);
+      btnComp.addEventListener('touchstart', (e) => { e.preventDefault(); sComp(); }); btnComp.addEventListener('touchend', eComp);
+
+      window.addEventListener('resize', fitCanvasToViewport);
+    }
+
+    window.onload = () => { initEvents(); };
+  </script>
+</body>
+</html>
+```

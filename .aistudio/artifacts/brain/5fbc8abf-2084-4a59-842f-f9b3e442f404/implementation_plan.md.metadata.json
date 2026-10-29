@@ -1,0 +1,6 @@
+{
+  "summary":  "Complete implementation plan and technical specification for Planetary Derotation, Center-of-Mass Stacking, and the newly added Deep-Sky ROI (Galaxies, Nebulae, Star Clusters, Planets) detection, auto-centering, and detail enhancement suite. Covers the server-managed Gemini API proxy architecture with zero user key setup.",
+  "updatedAt":  "2026-10-26T06:42:19.227753203Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

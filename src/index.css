@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #05070c;
+    color: #e2e8f0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+}
+
+/* Custom Astro Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #080c14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}
+
+/* Range Sliders */
+input[type="range"].astro-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #151d2e;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+input[type="range"].astro-slider:hover {
+  background: #1e293f;
+}
+
+input[type="range"].astro-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #38bdf8;
+  border: 2px solid #06080d;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"].astro-slider::-webkit-slider-thumb:hover,
+input[type="range"].astro-slider::-webkit-slider-thumb:active {
+  transform: scale(1.22);
+  background: #7dd3fc;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.9);
+}
+
+/* Sliders color accents */
+input[type="range"].astro-slider.slider-red::-webkit-slider-thumb {
+  background: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.6);
+}
+input[type="range"].astro-slider.slider-green::-webkit-slider-thumb {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+input[type="range"].astro-slider.slider-blue::-webkit-slider-thumb {
+  background: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.6);
+}
+input[type="range"].astro-slider.slider-amber::-webkit-slider-thumb {
+  background: #fbbf24;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+}
+input[type="range"].astro-slider.slider-purple::-webkit-slider-thumb {
+  background: #c084fc;
+  box-shadow: 0 0 8px rgba(192, 132, 252, 0.6);
+}
+input[type="range"].astro-slider.slider-cyan::-webkit-slider-thumb {
+  background: #22d3ee;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+
+/* Viewport Starfield Pattern */
+.viewport-pattern {
+  background-color: #04060a;
+  background-image: 
+    radial-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+    radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px;
+}
+
+/* Astronomical Dark-adapted Red Light Mode */
+.night-vision {
+  filter: sepia(100%) hue-rotate(305deg) saturate(450%) brightness(0.82) contrast(1.1);
+}
+
+/* Picking Mask Cursor */
+.cursor-crosshair-pick {
+  cursor: crosshair !important;
+}
+
+/* Subtle Glass Panel */
+.astro-glass {
+  background: rgba(13, 18, 29, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(31, 43, 66, 0.7);
+}
